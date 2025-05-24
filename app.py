@@ -1,75 +1,64 @@
-
 import streamlit as st
 import pandas as pd
-import base64
 
 st.set_page_config(page_title="القواعد القضائية اليمنية", layout="centered")
-st.markdown('<h1 style="text-align: right;">القواعد القضائية اليمنية</h1>', unsafe_allow_html=True)
 
 @st.cache_data
 def load_data():
     df = pd.read_csv("القواعد_القضائية.csv")
     if "الرقم" not in df.columns:
         df.insert(0, "الرقم", range(1, len(df) + 1))
-    if "نوع القضية" not in df.columns:
-        df["نوع القضية"] = "غير محدد"
     return df
 
 df = load_data()
 
-if "cart" not in st.session_state:
-    st.session_state.cart = []
+st.markdown("<h1 style='text-align: center;'>القواعد القضائية اليمنية</h1>", unsafe_allow_html=True)
 
-search_query = st.text_input("ابحث في القواعد القضائية:")
+# صندوق البحث بمحاذاة اليمين
+col1, col2 = st.columns([5, 1])
+with col1:
+    search = st.text_input("ابحث في القواعد القضائية:", value="", label_visibility="visible")
+with col2:
+    if st.button("عودة"):
+        search = ""
 
-if search_query.strip() == "":
-    results = df
+if search:
+    filtered_df = df[df["القاعدة القضائية"].str.contains(search, case=False, na=False)]
 else:
-    results = df[df["القاعدة القضائية"].str.contains(search_query, case=False, na=False)]
+    filtered_df = df
 
-def toggle_cart(index):
-    row = results.iloc[index]
-    existing = next((item for item in st.session_state.cart if item["الرقم"] == row["الرقم"]), None)
-    if existing:
-        st.session_state.cart.remove(existing)
+st.write(f"عدد النتائج: {len(filtered_df)}")
+
+# المفضلة والسلة
+if "favorites" not in st.session_state:
+    st.session_state.favorites = []
+
+# زر عرض السلة
+if st.button("عرض السلة"):
+    st.markdown("---")
+    st.subheader("السلة")
+    for item in st.session_state.favorites:
+        st.markdown(f"<div style='direction: rtl; font-size: 18px;'>"
+                    f"<b>{item['الرقم']}.</b> {item['القاعدة القضائية']} "
+                    f"<br>نوع القضية: <span style='color: green;'>{item['نوع القضية']}</span>"
+                    f"</div>", unsafe_allow_html=True)
+        if st.button(f"❌ إزالة من السلة - {item['الرقم']}"):
+            st.session_state.favorites = [f for f in st.session_state.favorites if f["الرقم"] != item["الرقم"]]
+    st.markdown("---")
+
+# عرض القواعد
+for _, item in filtered_df.iterrows():
+    st.markdown("---")
+    st.markdown(f"<div style='direction: rtl; font-size: 18px;'>"
+                f"<b>{item['الرقم']}.</b> {item['القاعدة القضائية']} "
+                f"<br>نوع القضية: <span style='color: green;'>{item['نوع القضية']}</span>"
+                f"</div>", unsafe_allow_html=True)
+
+    if any(f["الرقم"] == item["الرقم"] for f in st.session_state.favorites):
+        if st.button(f"❌ إزالة من السلة - {item['الرقم']}"):
+            st.session_state.favorites = [f for f in st.session_state.favorites if f["الرقم"] != item["الرقم"]]
     else:
-        st.session_state.cart.append({
-            "الرقم": row["الرقم"],
-            "القاعدة القضائية": row["القاعدة القضائية"],
-            "رقم الطعن": row["رقم الطعن"],
-            "نوع القضية": row["نوع القضية"]
-        })
+        if st.button(f"➕ إضافة للسلة - {item['الرقم']}"):
+            st.session_state.favorites.append(item)
 
-st.markdown(f"<div style='text-align:right;'>عدد النتائج: {len(results)}</div>", unsafe_allow_html=True)
-
-for i, row in results.iterrows():
-    with st.container():
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown(f"<div style='text-align:right;'><b>{int(row['الرقم'])}.</b> {row['القاعدة القضائية']}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='text-align:right;'>🔹 نوع القضية: <span style='color:green;'>{row['نوع القضية']}</span></div>", unsafe_allow_html=True)
-
-        cols = st.columns([1, 1, 5])
-        with cols[0]:
-            label = "❌ إزالة من السلة" if any(item['الرقم'] == row["الرقم"] for item in st.session_state.cart) else "➕ إضافة للسلة"
-            st.button(label, key=f"cart_{row['الرقم']}", on_click=toggle_cart, args=(i,))
-        with cols[1]:
-            st.text_input("انسخ يدويًا:", value=row["القاعدة القضائية"], key=f"copy_text_{row['الرقم']}", label_visibility="collapsed")
-
-st.markdown("<hr>", unsafe_allow_html=True)
-st.markdown("<h3 style='text-align:right;'>السلة</h3>", unsafe_allow_html=True)
-
-if st.session_state.cart:
-    for item in st.session_state.cart:
-        st.markdown(f"<div style='text-align:right;'><b>{item['الرقم']}.</b> {item['القاعدة القضائية']}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='text-align:right;'>🔹 نوع القضية: <span style='color:green;'>{item['نوع القضية']}</span></div>", unsafe_allow_html=True)
-        st.button(f"❌ إزالة من السلة", key=f"remove_{item['الرقم']}", on_click=lambda i=item['الرقم']: st.session_state.cart.__delitem__(
-            next(index for index, val in enumerate(st.session_state.cart) if val['الرقم'] == i)
-        ))
-
-    selected_ids = [str(item["الرقم"]) for item in st.session_state.cart]
-    message = "أرغب في الحصول على الأحكام الخاصة بالقواعد التالية: " + "، ".join(selected_ids)
-    encoded_message = message.replace(" ", "%20").replace("،", "%2C")
-    whatsapp_url = f"https://wa.me/967777533034?text={encoded_message}"
-    st.markdown(f"<div style='text-align:right;'><a href='{whatsapp_url}' target='_blank'>📩 مراسلتنا عبر واتساب</a></div>", unsafe_allow_html=True)
-else:
-    st.markdown("<div style='text-align:right;color:gray;'>لم تقم بإضافة أي قاعدة إلى السلة بعد.</div>", unsafe_allow_html=True)
+st.markdown("---")
